@@ -1,0 +1,5 @@
+#!/bin/bash
+
+cargo build --release 
+cd target/release
+./simple-exex node --dev --http --authrpc.jwtsecret jwt.hex --dev.block-time 10sec --datadir datadir
