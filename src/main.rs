@@ -6,7 +6,8 @@ use reth::
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_ethereum::EthereumNode;
 use reth_tracing::tracing::info;
-use std::{process::Command, sync::{Arc, Mutex}};
+use core::time;
+use std::{process::Command, sync::{Arc, Mutex}, time::Instant};
 
 
 struct CommandMut {
@@ -21,10 +22,13 @@ async fn my_exex<Node: FullNodeComponents>(mut ctx: ExExContext<Node>, cmd_mut: 
                 let blocks = new.blocks_iter();
                 let mut mut_guard = cmd_mut.lock().unwrap();
                 for block in blocks {
+                    let start_time = Instant::now();
                     let output = Command::new("rsp").args(["--block-number", &format!("{}", block.block.number), "--rpc-url", "http://localhost:8545/", "--chain-id", "1337", "--prove"]).output().expect("failed to run the process");
                     println!("************************************************************************");
                     println!("*******************************exit status******************************: {}", output.status);
                     println!("************************************************************************");
+                    let elapsed_time = start_time.elapsed();
+                    println!("***********************Total proving time: {:?}secs", elapsed_time.as_secs())
                  }
                 mut_guard.command_mutex += 1; 
             }
