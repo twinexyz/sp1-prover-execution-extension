@@ -33,7 +33,7 @@ async fn _eth_get_proof() -> Result<(), Box<dyn std::error::Error>> {
     // Define the account and storage keys for which you want to get proof
     let account = "0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec"; // Replace with the target account
     let storage_keys = vec![
-        "0x0000000000000000000000000000000000000000000000000000000000000000" // Replace with the storage keys you're interested in
+        "0x0000000000000000000000000000000000000000000000000000000000000000", // Replace with the storage keys you're interested in
     ];
 
     // Prepare the JSON-RPC payload for eth_getProof
@@ -52,11 +52,7 @@ async fn _eth_get_proof() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
 
     // Send the JSON-RPC request
-    let response = client
-        .post(url)
-        .json(&payload)
-        .send()
-        .await?;
+    let response = client.post(url).json(&payload).send().await?;
 
     // Deserialize the JSON-RPC response
     let rpc_response: EthRpcResponse = response.json().await?;
