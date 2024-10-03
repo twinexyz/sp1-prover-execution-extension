@@ -1,3 +1,5 @@
+use std::sync::mpsc;
+
 use alloy::{
     hex::{FromHex, ToHexExt},
     signers::local::PrivateKeySigner,
@@ -6,6 +8,7 @@ use alloy_network::{EthereumWallet, TransactionBuilder};
 use alloy_primitives::{Address, B256, U256};
 use alloy_provider::{Provider, ProviderBuilder};
 use alloy_sol_types::sol;
+use reth::revm::precompile::bn128;
 
 sol! {
     #[sol(rpc)] // <-- Important! Generates the necessary `MyContract` struct and function methods.
@@ -24,38 +27,45 @@ sol! {
     }
 }
 
-pub async fn post_to_l1() {
+pub async fn post_to_l1(rx: mpsc::Receiver<u64>) {
     let contract_address = std::env::var("CONTRACT_ADDRESS").unwrap();
     let private_key = std::env::var("PRIVATE_KEY").unwrap();
     let rpc_url = std::env::var("RPC_URL").unwrap();
-
     let contract_address = Address::from_hex(contract_address).unwrap();
     let signer = PrivateKeySigner::from_bytes(&B256::from_hex(private_key).unwrap()).unwrap();
     let wallet = EthereumWallet::from(signer);
 
-    let provider = ProviderBuilder::new()
-        .with_cached_nonce_management()
-        .wallet(wallet.clone())
-        .on_builtin(&rpc_url)
-        .await
-        .unwrap();
-    let contract = Counter::new(contract_address, provider.clone());
+    loop {
+        let block_number = rx.recv();
+        match block_number {
+            Ok(bn) => {
+                let provider = ProviderBuilder::new()
+                    .with_cached_nonce_management()
+                    .wallet(wallet.clone())
+                    .on_builtin(&rpc_url)
+                    .await
+                    .unwrap();
+                let contract = Counter::new(contract_address, provider.clone());
 
-    let call_builder = contract.getNumber();
-    let number = call_builder.call().await.unwrap();
-    println!("number is {}", number._0);
+                let call_builder = contract.getNumber();
+                let number = call_builder.call().await.unwrap();
+                println!("number is {}", number._0);
 
-    let set_call_builder = contract
-        .setNumber(U256::from(10))
-        .into_transaction_request()
-        .with_gas_limit(250000)
-        .with_chain_id(1337)
-        .with_max_fee_per_gas(2000000000000)
-        .with_max_priority_fee_per_gas(2000000);
+                let set_call_builder = contract
+                    .setNumber(U256::from(10))
+                    .into_transaction_request()
+                    .with_gas_limit(250000)
+                    .with_chain_id(1337)
+                    .with_max_fee_per_gas(2000000000000)
+                    .with_max_priority_fee_per_gas(2000000);
 
-    let builder = provider.send_transaction(set_call_builder).await.unwrap();
+                let builder = provider.send_transaction(set_call_builder).await.unwrap();
 
-    let tx_hash = *builder.tx_hash();
+                let tx_hash = *builder.tx_hash();
 
-    println!("{:?}", tx_hash.encode_hex())
+                println!("{:?}", tx_hash.encode_hex())
+            }
+            Err(_) => break,
+        }
+    }
 }

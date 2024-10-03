@@ -6,12 +6,12 @@ use reth_node_ethereum::EthereumNode;
 use reth_tracing::tracing::info;
 use std::{
     process::Command,
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc, Mutex},
     time::Instant,
 };
 mod poster;
-use poster::poster::post_to_l1;
 use dotenv::dotenv;
+use poster::poster::post_to_l1;
 
 async fn my_exex<Node: FullNodeComponents>(
     mut ctx: ExExContext<Node>,
@@ -21,6 +21,7 @@ async fn my_exex<Node: FullNodeComponents>(
         match &notification {
             ExExNotification::ChainCommitted { new } => {
                 let blocks = new.blocks_iter();
+                let (tx, mut rx) = mpsc::channel::<u64>();
                 {
                     let mut mut_guard = cmd_mut.lock().unwrap();
                     for block in blocks {
@@ -44,12 +45,13 @@ async fn my_exex<Node: FullNodeComponents>(
                         println!(
                             "***********************Total proving time: {:?}secs",
                             elapsed_time.as_secs()
-                        )
+                        );
+                        tx.send(block.block.number).unwrap();
                     }
                     *mut_guard += 1;
                 }
-                // take input from the file 
-                post_to_l1().await;
+                // take input from the file
+                post_to_l1(rx).await;
             }
             ExExNotification::ChainReorged { old, new } => {
                 info!(from_chain = ?old.range(), to_chain = ?new.range(), "Received reorg");
