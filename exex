@@ -2,4 +2,4 @@
 
 cargo build --release 
 cd target/release
-./sp1-prover-exex node --dev --http --authrpc.jwtsecret jwt.hex --dev.block-time 10sec --datadir datadir
+./sp1-prover-exex node --dev --http --http.api debug,eth,net,trace,web3,rpc,reth,ots --datadir /tmp/datadir --rpc.eth-proof-window 100 --rpc.proof-permits 1000 --dev.block-time 10sec
