@@ -21,10 +21,13 @@ async fn my_exex<Node: FullNodeComponents>(
         match &notification {
             ExExNotification::ChainCommitted { new } => {
                 let blocks = new.blocks_iter();
-                let (tx, mut rx) = mpsc::channel::<u64>();
+                let (tx, rx) = mpsc::channel::<u64>();
                 {
                     let mut mut_guard = cmd_mut.lock().unwrap();
                     for block in blocks {
+                        if block.transactions().count() == 0usize {
+                            continue;
+                        }
                         let start_time = Instant::now();
                         let output = Command::new("rsp")
                             .args([
