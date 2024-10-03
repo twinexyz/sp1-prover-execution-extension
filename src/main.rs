@@ -23,29 +23,29 @@ async fn my_exex<Node: FullNodeComponents>(
                 let blocks = new.blocks_iter();
                 {
                     let mut mut_guard = cmd_mut.lock().unwrap();
-                    // for block in blocks {
-                    //     let start_time = Instant::now();
-                    //     let output = Command::new("rsp")
-                    //         .args([
-                    //             "--block-number",
-                    //             &format!("{}", block.block.number),
-                    //             "--rpc-url",
-                    //             "http://localhost:8545/",
-                    //             "--chain-id",
-                    //             "1337",
-                    //             "--prove",
-                    //         ])
-                    //         .output()
-                    //         .expect("failed to run the process");
-                    //     println!("************************************************************************");
-                    //     println!("*******************************exit status******************************: {}", output.status);
-                    //     println!("************************************************************************");
-                    //     let elapsed_time = start_time.elapsed();
-                    //     println!(
-                    //         "***********************Total proving time: {:?}secs",
-                    //         elapsed_time.as_secs()
-                    //     )
-                    // }
+                    for block in blocks {
+                        let start_time = Instant::now();
+                        let output = Command::new("rsp")
+                            .args([
+                                "--block-number",
+                                &format!("{}", block.block.number),
+                                "--rpc-url",
+                                "http://localhost:8545/",
+                                "--chain-id",
+                                "1337",
+                                "--prove",
+                            ])
+                            .output()
+                            .expect("failed to run the process");
+                        println!("************************************************************************");
+                        println!("*******************************exit status******************************: {}", output.status);
+                        println!("************************************************************************");
+                        let elapsed_time = start_time.elapsed();
+                        println!(
+                            "***********************Total proving time: {:?}secs",
+                            elapsed_time.as_secs()
+                        )
+                    }
                     *mut_guard += 1;
                 }
                 // take input from the file 

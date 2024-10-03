@@ -45,10 +45,6 @@ pub async fn post_to_l1() {
     let number = call_builder.call().await.unwrap();
     println!("number is {}", number._0);
 
-    if true {
-        panic!("this is panic")
-    }
-
     let set_call_builder = contract
         .setNumber(U256::from(10))
         .into_transaction_request()
