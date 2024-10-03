@@ -6,7 +6,6 @@ use reth::
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_ethereum::EthereumNode;
 use reth_tracing::tracing::info;
-use core::time;
 use std::{process::Command, sync::{Arc, Mutex}, time::Instant};
 
 
