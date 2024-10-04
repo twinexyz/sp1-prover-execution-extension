@@ -33,6 +33,11 @@ pub async fn post_to_l1(rx: mpsc::Receiver<u64>) {
         let block_number = rx.recv();
         match block_number {
             Ok(bn) => {
+                if bn == 0u64 {
+                    continue
+                } else if bn == u64::MAX {
+                    return 
+                }
                 let proof_file_path = format!("proofs/execution_proof_{}.proof", bn);
                 let proof_file = fs::File::open(proof_file_path).unwrap();
                 let proof_object: Result<sp1_sdk::SP1ProofWithPublicValues, serde_json::Error> =
@@ -40,32 +45,30 @@ pub async fn post_to_l1(rx: mpsc::Receiver<u64>) {
                 match proof_object {
                     Ok(proof) => {
                         _ = proof;
-                        println!("proof found")
+                        println!("proof found");
+                        if true {
+                            return;
+                        }
+                        // TODO: posting to L1 is done here.
+                        let provider = ProviderBuilder::new()
+                            .with_cached_nonce_management()
+                            .wallet(wallet.clone())
+                            .on_builtin(&rpc_url)
+                            .await
+                            .unwrap();
+                        let contract = Counter::new(contract_address, provider.clone());
+
+                        let byte_value = Bytes::new();
+                        let byte_value2 = Bytes::new();
+                        let call_builder = contract.verifyProof(
+                            alloy_primitives::FixedBytes([0u8; 32]),
+                            alloy_primitives::Bytes(byte_value),
+                            alloy_primitives::Bytes(byte_value2),
+                        );
+                        _ = call_builder.call().await.unwrap();
                     }
                     Err(_) => println!("proof not found"),
                 }
-
-                if true {
-                    return;
-                }
-
-                let provider = ProviderBuilder::new()
-                    .with_cached_nonce_management()
-                    .wallet(wallet.clone())
-                    .on_builtin(&rpc_url)
-                    .await
-                    .unwrap();
-                let contract = Counter::new(contract_address, provider.clone());
-
-                let byte_value = Bytes::new();
-                let byte_value2 = Bytes::new();
-                let call_builder = contract.verifyProof(
-                    alloy_primitives::FixedBytes([0u8; 32]),
-                    alloy_primitives::Bytes(byte_value),
-                    alloy_primitives::Bytes(byte_value2),
-                );
-                _ = call_builder.call().await.unwrap();
-                // TODO: send the proof back to the L1 chain
             }
             Err(_) => break,
         }

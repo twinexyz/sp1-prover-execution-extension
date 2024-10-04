@@ -28,3 +28,7 @@ alloy-provider = "0.4.2"
 alloy-contract = "0.4.2"
 dotenv = "0.15.0"
 sp1-sdk = "2.0.0"
+tonic = "0.12.3"
+
+[build-dependencies]
+tonic-build = "0.12.3"

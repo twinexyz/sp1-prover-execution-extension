@@ -7,7 +7,7 @@ use reth_tracing::tracing::info;
 use std::{
     process::Command,
     sync::{mpsc, Arc, Mutex},
-    time::Instant,
+    time::Instant, u64,
 };
 mod poster;
 use dotenv::dotenv;
@@ -25,9 +25,12 @@ async fn my_exex<Node: FullNodeComponents>(
                 {
                     let mut mut_guard = cmd_mut.lock().unwrap();
                     for block in blocks {
-                        if block.transactions().count() == 0usize {
+                        if block.transaction_root_is_empty() {
+                            println!("always continue?????");
+                            tx.send(0).unwrap();
                             continue;
                         }
+                        println!("proof generation started for block {}", block.block.number);
                         let start_time = Instant::now();
                         let output = Command::new("rsp")
                             .args([
@@ -53,7 +56,7 @@ async fn my_exex<Node: FullNodeComponents>(
                     }
                     *mut_guard += 1;
                 }
-                // take input from the file
+                tx.send(u64::MAX).unwrap();
                 post_to_l1(rx).await;
             }
             ExExNotification::ChainReorged { old, new } => {
