@@ -1,10 +1,11 @@
 use std::{fs, sync::mpsc};
 
-use alloy::{hex::FromHex, signers::local::PrivateKeySigner};
-use alloy_network::EthereumWallet;
+use alloy::{hex::{FromHex, ToHexExt}, signers::local::PrivateKeySigner};
+use alloy_network::{EthereumWallet, TransactionBuilder};
 use alloy_primitives::{bytes::Bytes, Address, B256};
-use alloy_provider::ProviderBuilder;
+use alloy_provider::{Provider, ProviderBuilder};
 use alloy_sol_types::sol;
+use reth::revm::handler::mainnet::call;
 
 sol! {
     #[sol(rpc)] // <-- Important! Generates the necessary `MyContract` struct and function methods.
@@ -16,9 +17,10 @@ sol! {
             bytes32 programVKey,
             bytes calldata publicValues,
             bytes calldata proofBytes
-        ) external view;
+        ) external;
     }
 }
+const ELF: &[u8] = include_bytes!("/Users/swopnilparajuli/workspace/cedro/new-rsp/rsp-patched-local/bin/client-local/elf/riscv32im-succinct-zkvm-elf");
 
 pub async fn post_to_l1(rx: mpsc::Receiver<u64>) {
     let contract_address = std::env::var("CONTRACT_ADDRESS").unwrap();
@@ -30,12 +32,12 @@ pub async fn post_to_l1(rx: mpsc::Receiver<u64>) {
 
     loop {
         let block_number = rx.recv();
-        match block_number {
+        match block_number{
             Ok(bn) => {
                 if bn == 0u64 {
                     continue
                 } else if bn == u64::MAX {
-                    return 
+                    return
                 }
                 let proof_file_path = format!("proofs/execution_proof_{}.proof", bn);
                 let proof_file = fs::File::open(proof_file_path).unwrap();
@@ -45,9 +47,9 @@ pub async fn post_to_l1(rx: mpsc::Receiver<u64>) {
                     Ok(proof) => {
                         _ = proof;
                         println!("proof found");
-                        if true {
-                            return;
-                        }
+                        // if true {
+                        //     return;
+                        // }
                         // TODO: posting to L1 is done here.
                         let provider = ProviderBuilder::new()
                             .with_cached_nonce_management()
@@ -56,20 +58,28 @@ pub async fn post_to_l1(rx: mpsc::Receiver<u64>) {
                             .await
                             .unwrap();
                         let contract = Verifier::new(contract_address, provider.clone());
-
-                        let byte_value = Bytes::new();
-                        let byte_value2 = Bytes::new();
+                        let public_values = Bytes::copy_from_slice(proof.public_values.as_slice());
+                        println!("public values: {:?}", proof.public_values.hash_bn254());
+                        let plonk_proof = Bytes::copy_from_slice(proof.raw().as_bytes());
+                        println!("plonk proof: {:?}", proof.raw());
+                        let vkey = proof.proof.clone().try_as_plonk().unwrap().plonk_vkey_hash;
+                        println!("vkey: {:?}", vkey.encode_hex_with_prefix());
                         let call_builder = contract.verifyProof(
-                            alloy_primitives::FixedBytes([0u8; 32]),
-                            alloy_primitives::Bytes(byte_value),
-                            alloy_primitives::Bytes(byte_value2),
+                            alloy_primitives::FixedBytes(vkey),
+                            alloy_primitives::Bytes(public_values),
+                            alloy_primitives::Bytes(plonk_proof),
                         );
-                        _ = call_builder.call().await.unwrap();
+                        let call_builder = call_builder.into_transaction_request().with_gas_limit(25000000).with_chain_id(1337).with_max_fee_per_gas(200000000000000).with_max_priority_fee_per_gas(2000000);
+                        let return_value = provider.send_transaction(call_builder).await.unwrap();
+
+                        let tx_hash = *return_value.tx_hash();
+
+                        println!("tx hash is {:?}",    tx_hash.encode_hex())
                     }
                     Err(_) => println!("proof not found"),
                 }
             }
             Err(_) => break,
-        }
+        } 
     }
 }
