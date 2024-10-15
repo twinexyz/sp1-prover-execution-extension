@@ -6,17 +6,13 @@ use reth_node_ethereum::EthereumNode;
 use reth_tracing::tracing::info;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::read_to_string,
-    process::ExitStatus,
     sync::{mpsc, Arc, Mutex},
     time::Instant,
     u64,
 };
-use yaml_config::load;
 mod poster;
 mod prover;
 use clap::Parser;
-use dotenv::dotenv;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -33,7 +29,6 @@ struct Config {
 async fn my_exex<Node: FullNodeComponents>(
     mut ctx: ExExContext<Node>,
     cmd_mut: Arc<Mutex<i32>>,
-    config: Config,
 ) -> eyre::Result<()> {
     // TODO: make new poster right here
     while let Some(notification) = ctx.notifications.next().await {
@@ -51,10 +46,10 @@ async fn my_exex<Node: FullNodeComponents>(
                             continue;
                         }
                         let start_time = Instant::now();
-                        let exit_status = config.prover.prove(block.block.number);
-                        if !exit_status.success() {
-                            println!("proof generation failed.")
-                        }
+                        // let exit_status = config.prover.prove(block.block.number);
+                        // if !exit_status.success() {
+                        //     println!("proof generation failed.")
+                        // }
                         let elapsed_time = start_time.elapsed();
                         println!(
                             "***********************Total proving time: {:?}secs",
@@ -85,11 +80,11 @@ async fn my_exex<Node: FullNodeComponents>(
 }
 
 fn main() -> eyre::Result<()> {
-    dotenv().ok();
-    let args = Args::parse();
+    // dotenv().ok();
+    // let args = Args::parse();
 
-    let config_file = read_to_string(args.config).unwrap();
-    let config: Config = serde_yaml::from_str(&config_file).unwrap();
+    // let config_file = read_to_string(args.config).unwrap();
+    // let config: Config = serde_yaml::from_str(&config_file).unwrap();
 
     let cmd_mut = Arc::new(Mutex::new(0));
     reth::cli::Cli::parse_args().run(|builder, _| async move {
@@ -97,7 +92,7 @@ fn main() -> eyre::Result<()> {
             .node(EthereumNode::default())
             .install_exex("my-exex", |ctx| async move {
                 println!("installing exex");
-                Ok(my_exex(ctx, cmd_mut, config))
+                Ok(my_exex(ctx, cmd_mut)) // TODO: integrate accepting config from yaml
             })
             .launch()
             .await?;
