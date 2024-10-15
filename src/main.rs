@@ -17,7 +17,6 @@ mod poster;
 mod prover;
 use clap::Parser;
 use dotenv::dotenv;
-use poster::poster::post_to_l1;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -36,6 +35,7 @@ async fn my_exex<Node: FullNodeComponents>(
     cmd_mut: Arc<Mutex<i32>>,
     config: Config,
 ) -> eyre::Result<()> {
+    // TODO: make new poster right here
     while let Some(notification) = ctx.notifications.next().await {
         match &notification {
             ExExNotification::ChainCommitted { new } => {
@@ -65,7 +65,7 @@ async fn my_exex<Node: FullNodeComponents>(
                     *mut_guard += 1;
                 }
                 tx.send(u64::MAX).unwrap();
-                post_to_l1(rx).await;
+                poster::poster::Poster::send_proof_to_aggregator(rx).await;
             }
             ExExNotification::ChainReorged { old, new } => {
                 info!(from_chain = ?old.range(), to_chain = ?new.range(), "Received reorg");
