@@ -10,7 +10,7 @@ pub struct Prover {
 }
 
 impl Prover {
-    pub fn new(last_proved_block: u64, proof_path: String, rpc_url: String) -> Self {
+    pub fn _new(last_proved_block: u64, proof_path: String, rpc_url: String) -> Self {
         let output = Command::new("which").args(["rsp"]).output().unwrap().stdout;
         if output.len() == 0 {
             panic!("rsp process not found in PATH")
@@ -24,7 +24,7 @@ impl Prover {
     }
 
     /// calculates the execution proof of the specified block using rsp and returns the file path.
-    pub fn prove(&self, block_number: u64) -> ExitStatus {
+    pub fn _prove(&self, block_number: u64) -> ExitStatus {
         let output = Command::new("rsp")
             .args([
                 "--block-number",
