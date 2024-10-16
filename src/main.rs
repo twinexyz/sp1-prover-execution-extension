@@ -1,10 +1,11 @@
 mod utils;
+use dotenv::dotenv;
 use futures_util::StreamExt;
+use prover::prover::Prover;
 use reth::api::FullNodeComponents;
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_ethereum::EthereumNode;
 use reth_tracing::tracing::info;
-use serde::{Deserialize, Serialize};
 use std::{
     sync::{mpsc, Arc, Mutex},
     time::Instant,
@@ -12,25 +13,12 @@ use std::{
 };
 mod poster;
 mod prover;
-use clap::Parser;
-
-#[derive(Debug, Parser)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[arg(short, long)]
-    config: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-struct Config {
-    prover: prover::prover::Prover,
-}
 
 async fn my_exex<Node: FullNodeComponents>(
     mut ctx: ExExContext<Node>,
     cmd_mut: Arc<Mutex<i32>>,
+    prover: Prover,
 ) -> eyre::Result<()> {
-    // TODO: make new poster right here
     while let Some(notification) = ctx.notifications.next().await {
         match &notification {
             ExExNotification::ChainCommitted { new } => {
@@ -39,17 +27,16 @@ async fn my_exex<Node: FullNodeComponents>(
                 {
                     let mut mut_guard = cmd_mut.lock().unwrap();
                     for block in blocks {
-                        _ = block;
                         if block.transaction_root_is_empty() {
                             println!("always continue?????");
                             tx.send(0).unwrap();
                             continue;
                         }
                         let start_time = Instant::now();
-                        // let exit_status = config.prover.prove(block.block.number);
-                        // if !exit_status.success() {
-                        //     println!("proof generation failed.")
-                        // }
+                        let exit_status = prover.prove(block.block.number);
+                        if !exit_status.success() {
+                            println!("proof generation failed.")
+                        }
                         let elapsed_time = start_time.elapsed();
                         println!(
                             "***********************Total proving time: {:?}secs",
@@ -60,7 +47,7 @@ async fn my_exex<Node: FullNodeComponents>(
                     *mut_guard += 1;
                 }
                 tx.send(u64::MAX).unwrap();
-                poster::poster::Poster::send_proof_to_aggregator(rx).await;
+                prover.poster.send_proof_to_aggregator(rx).await;
             }
             ExExNotification::ChainReorged { old, new } => {
                 info!(from_chain = ?old.range(), to_chain = ?new.range(), "Received reorg");
@@ -80,11 +67,22 @@ async fn my_exex<Node: FullNodeComponents>(
 }
 
 fn main() -> eyre::Result<()> {
-    // dotenv().ok();
-    // let args = Args::parse();
+    dotenv().ok();
 
-    // let config_file = read_to_string(args.config).unwrap();
-    // let config: Config = serde_yaml::from_str(&config_file).unwrap();
+    let aggregator_url = std::env::var("AGGREGATOR_URL").unwrap();
+    let rpc_url = std::env::var("CHAIN_RPC_URL").unwrap();
+    let identifier = std::env::var("IDENTIFIER").unwrap();
+    let last_proved_block = std::env::var("LAST_PROVED_BLOCK").unwrap();
+    let proof_path = std::env::var("PROOF_PATH").unwrap();
+    let last_proved_block: u64 = last_proved_block.parse().unwrap();
+
+    let prover = Prover::new(
+        last_proved_block,
+        proof_path,
+        rpc_url,
+        identifier,
+        aggregator_url,
+    );
 
     let cmd_mut = Arc::new(Mutex::new(0));
     reth::cli::Cli::parse_args().run(|builder, _| async move {
@@ -92,7 +90,7 @@ fn main() -> eyre::Result<()> {
             .node(EthereumNode::default())
             .install_exex("my-exex", |ctx| async move {
                 println!("installing exex");
-                Ok(my_exex(ctx, cmd_mut)) // TODO: integrate accepting config from yaml
+                Ok(my_exex(ctx, cmd_mut, prover))
             })
             .launch()
             .await?;
