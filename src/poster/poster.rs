@@ -41,6 +41,7 @@ impl Poster {
                                 "params": [
                                     {
                                         "type": "SP1Proof",
+                                        "identifier": "identifier_1", // TODO: take identifier from the config
                                         "proof": proof_buffer
                                     }
                                     ],
