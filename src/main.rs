@@ -27,22 +27,22 @@ async fn my_exex<Node: FullNodeComponents>(
                 {
                     let mut mut_guard = cmd_mut.lock().unwrap();
                     for block in blocks {
-                        if block.transaction_root_is_empty() {
-                            println!("always continue?????");
-                            tx.send(0).unwrap();
-                            continue;
-                        }
+                        // if block.transaction_root_is_empty() {
+                        //     println!("always continue?????");
+                        //     tx.send(0).unwrap();
+                        //     continue;
+                        // }
                         let start_time = Instant::now();
-                        let exit_status = prover.prove(block.block.number);
-                        if !exit_status.success() {
-                            println!("proof generation failed.")
-                        }
+                        // let exit_status = prover.prove(block.block.number);
+                        // if !exit_status.success() {
+                        //     println!("proof generation failed.")
+                        // }
                         let elapsed_time = start_time.elapsed();
                         println!(
                             "***********************Total proving time: {:?}secs",
                             elapsed_time.as_secs()
                         );
-                        tx.send(block.block.number).unwrap();
+                        tx.send(2600).unwrap();
                     }
                     *mut_guard += 1;
                 }
@@ -72,7 +72,7 @@ fn main() -> eyre::Result<()> {
     let aggregator_url = std::env::var("AGGREGATOR_URL").unwrap();
     let rpc_url = std::env::var("CHAIN_RPC_URL").unwrap();
     let identifier = std::env::var("IDENTIFIER").unwrap();
-    let last_proved_block = std::env::var("LAST_PROVED_BLOCK").unwrap();
+    let last_proved_block = std::env::var("LAST_BLOCK_PROVED").unwrap();
     let proof_path = std::env::var("PROOF_PATH").unwrap();
     let chain_id = std::env::var("CHAIN_ID").unwrap();
     let last_proved_block: u64 = last_proved_block.parse().unwrap();
