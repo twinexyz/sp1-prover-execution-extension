@@ -3,23 +3,25 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{fs, io::Read, sync::mpsc};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Poster {
     aggregator_url: String,
     proof_path: String,
+    identifier: String,
 }
 
 static MAX_RETRY: u8 = 10;
 
 impl Poster {
-    pub fn _new(aggregator_url: String, proof_path: String) -> Self {
+    pub fn new(aggregator_url: String, proof_path: String, identifier: String) -> Self {
         Self {
             aggregator_url,
             proof_path,
+            identifier,
         }
     }
 
-    pub async fn send_proof_to_aggregator(rx: mpsc::Receiver<u64>) {
+    pub async fn send_proof_to_aggregator(&self, rx: mpsc::Receiver<u64>) {
         loop {
             let block_number = rx.recv();
             match block_number {
@@ -29,7 +31,8 @@ impl Poster {
                     } else if bn == u64::MAX {
                         return;
                     }
-                    let proof_file_path = format!("proofs/execution_proof_{}.proof", bn);
+                    let proof_file_path =
+                        format!("{}/execution_proof_{}.proof", self.proof_path, bn);
                     let mut proof_file = fs::File::open(proof_file_path).unwrap();
                     let mut proof_buffer = String::new();
                     let proof_json = proof_file.read_to_string(&mut proof_buffer);
@@ -41,7 +44,7 @@ impl Poster {
                                 "params": [
                                     {
                                         "type": "SP1Proof",
-                                        "identifier": "identifier_1", // TODO: take identifier from the config
+                                        "identifier": &self.identifier,
                                         "proof": proof_buffer
                                     }
                                     ],
@@ -51,7 +54,12 @@ impl Poster {
                             let client = Client::new();
                             let mut retry = 0u8;
                             loop {
-                                let response = client.post("").json(&payload).send().await.unwrap();
+                                let response = client
+                                    .post(&self.aggregator_url)
+                                    .json(&payload)
+                                    .send()
+                                    .await
+                                    .unwrap();
                                 if !response.status().is_success() {
                                     if retry < MAX_RETRY {
                                         retry += 1;
@@ -63,8 +71,6 @@ impl Poster {
                                 }
                                 break;
                             }
-
-                            // TODO: send json rpc to ...
                         }
                         Err(_) => println!("proof not found"),
                     }
