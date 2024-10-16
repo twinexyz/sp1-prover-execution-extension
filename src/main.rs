@@ -74,6 +74,7 @@ fn main() -> eyre::Result<()> {
     let identifier = std::env::var("IDENTIFIER").unwrap();
     let last_proved_block = std::env::var("LAST_PROVED_BLOCK").unwrap();
     let proof_path = std::env::var("PROOF_PATH").unwrap();
+    let chain_id = std::env::var("CHAIN_ID").unwrap();
     let last_proved_block: u64 = last_proved_block.parse().unwrap();
 
     let prover = Prover::new(
@@ -82,6 +83,7 @@ fn main() -> eyre::Result<()> {
         rpc_url,
         identifier,
         aggregator_url,
+        chain_id
     );
 
     let cmd_mut = Arc::new(Mutex::new(0));
