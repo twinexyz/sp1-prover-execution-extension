@@ -10673,6 +10673,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-build",
+ "tracing",
  "yaml-config",
 ]
 

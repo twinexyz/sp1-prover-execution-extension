@@ -59,18 +59,28 @@ impl Poster {
                                     .post(&self.aggregator_url)
                                     .json(&payload)
                                     .send()
-                                    .await
-                                    .unwrap();
-                                if !response.status().is_success() {
-                                    if retry < MAX_RETRY {
-                                        retry += 1;
-                                        continue;
-                                    } else {
-                                        println!("Proof could not be sent to the aggregator"); // TODO extended retry logic
+                                    .await;
+
+                                match response {
+                                    Ok(res) => {
+                                        if !res.status().is_success() {
+                                            if retry < MAX_RETRY {
+                                                retry += 1;
+                                                continue;
+                                            } else {
+                                                println!("Proof could not be sent to the aggregator"); // TODO extended retry logic
+                                                break;
+                                            }
+                                        }
                                         break;
-                                    }
+                                        
+                                    },
+                                    Err(_) => {
+                                        println!("Proof sending failed.");
+                                        break;
+                                    },
                                 }
-                                break;
+
                             }
                         }
                         Err(_) => println!("proof not found"),
