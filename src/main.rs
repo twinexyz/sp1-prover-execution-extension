@@ -27,22 +27,22 @@ async fn my_exex<Node: FullNodeComponents>(
                 {
                     let mut mut_guard = cmd_mut.lock().unwrap();
                     for block in blocks {
-                        if block.transaction_root_is_empty() {
-                            println!("always continue?????");
-                            tx.send(0).unwrap();
-                            continue;
-                        }
+                        // if block.transaction_root_is_empty() {
+                        //     println!("always continue?????");
+                        //     tx.send(0).unwrap();
+                        //     continue;
+                        // }
                         let start_time = Instant::now();
-                        let exit_status = prover.prove(block.block.number);
-                        if !exit_status.success() {
-                            println!("proof generation failed.")
-                        }
+                        // let exit_status = prover.prove(block.block.number);
+                        // if !exit_status.success() {
+                        //     println!("proof generation failed.")
+                        // }
                         let elapsed_time = start_time.elapsed();
                         println!(
                             "***********************Total proving time: {:?}secs",
                             elapsed_time.as_secs()
                         );
-                        tx.send(block.block.number).unwrap();
+                        tx.send(1101).unwrap();
                     }
                     *mut_guard += 1;
                 }
