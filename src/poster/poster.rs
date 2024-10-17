@@ -33,11 +33,12 @@ impl Poster {
                     }
                     let proof_file_path =
                         format!("{}/execution_proof_{}.proof", self.proof_path, bn);
-                    let mut proof_file = fs::File::open(proof_file_path).unwrap();
-                    let mut proof_buffer = String::new();
-                    let proof_json = proof_file.read_to_string(&mut proof_buffer);
-                    match proof_json {
-                        Ok(_) => {
+                    let proof_file = fs::File::open(proof_file_path).unwrap();
+                    let proof_object: Result<sp1_sdk::SP1ProofWithPublicValues, serde_json::Error> =
+                    serde_json::from_reader(proof_file);
+
+                    match proof_object {
+                        Ok(proof_buffer) => {
                             let payload = json!({
                                 "jsonrpc": "2.0",
                                 "method": "twarb_sendProof",
