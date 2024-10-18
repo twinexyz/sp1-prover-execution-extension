@@ -5,7 +5,7 @@ use prover::prover::Prover;
 use reth::api::FullNodeComponents;
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_ethereum::EthereumNode;
-use reth_tracing::tracing::info;
+use reth_tracing::tracing::{info, error, warn};
 use std::{
     sync::{mpsc, Arc, Mutex},
     time::Instant,
@@ -28,19 +28,18 @@ async fn my_exex<Node: FullNodeComponents>(
                     let mut mut_guard = cmd_mut.lock().unwrap();
                     for block in blocks {
                         if block.transaction_root_is_empty() {
-                            println!("always continue?????");
+                            warn!("Empty block {} so skipping", block.block.number);
                             tx.send(0).unwrap();
                             continue;
                         }
                         let start_time = Instant::now();
                         let exit_status = prover.prove(block.block.number);
                         if !exit_status.success() {
-                            println!("proof generation failed.")
+                            error!("proof generation for block {} failed.", block.block.number);
                         }
                         let elapsed_time = start_time.elapsed();
-                        println!(
-                            "***********************Total proving time: {:?}secs",
-                            elapsed_time.as_secs()
+                        info!("Block proving: Block: {} Total proving time: {:?}secs",
+                            block.block.number, elapsed_time.as_secs()
                         );
                         tx.send(block.block.number).unwrap();
                     }
@@ -91,7 +90,7 @@ fn main() -> eyre::Result<()> {
         let handle = builder
             .node(EthereumNode::default())
             .install_exex("my-exex", |ctx| async move {
-                println!("installing exex");
+                info!("installing exex");
                 Ok(my_exex(ctx, cmd_mut, prover))
             })
             .launch()

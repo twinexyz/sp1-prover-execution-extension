@@ -2,6 +2,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{fs, sync::mpsc};
+use reth_tracing::tracing::error;
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Poster {
@@ -68,7 +70,7 @@ impl Poster {
                                                 retry += 1;
                                                 continue;
                                             } else {
-                                                println!("Proof could not be sent to the aggregator"); // TODO extended retry logic
+                                                error!("Proof could not be sent to the aggregator"); // TODO extended retry logic
                                                 break;
                                             }
                                         }
@@ -76,14 +78,14 @@ impl Poster {
                                         
                                     },
                                     Err(_) => {
-                                        println!("Proof sending failed.");
+                                        error!("Proof sending failed.");
                                         break;
                                     },
                                 }
 
                             }
                         }
-                        Err(_) => println!("proof not found"),
+                        Err(_) =>error!("proof not found"),
                     }
                 }
                 Err(_) => break,
