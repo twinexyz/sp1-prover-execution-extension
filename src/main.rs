@@ -2,14 +2,12 @@ mod utils;
 use dotenv::dotenv;
 use futures_util::StreamExt;
 use prover::prover::Prover;
-use reth::api::FullNodeComponents;
+use reth::{api::FullNodeComponents, args::RpcServerArgs, builder::{node, NodeBuilder, NodeConfig}, chainspec::{Chain, ChainSpec}, primitives::Genesis};
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_ethereum::EthereumNode;
 use reth_tracing::tracing::{info, error, warn};
 use std::{
-    sync::{mpsc, Arc, Mutex},
-    time::Instant,
-    u64,
+    collections::HashMap, sync::{mpsc, Arc, Mutex}, time::Instant, u64
 };
 mod poster;
 mod prover;
@@ -85,6 +83,10 @@ fn main() -> eyre::Result<()> {
         chain_id
     );
 
+    let chain_spec = ChainSpec::builder().chain(Chain::dev()).genesis(Genesis::default()).london_activated().paris_activated().shanghai_activated().cancun_activated().build();
+
+    let node_config = NodeConfig::test().with_rpc(RpcServerArgs::default().with_http()).with_chain(chain_spec);
+
     let cmd_mut = Arc::new(Mutex::new(0));
     reth::cli::Cli::parse_args().run(|builder, _| async move {
         let handle = builder
@@ -98,4 +100,21 @@ fn main() -> eyre::Result<()> {
 
         handle.wait_for_node_exit().await
     })
+
+
+    // let cmd_mut = Arc::new(Mutex::new(0));
+    // reth::cli::Cli::parse_args().run(|builder, _| async move {
+    //     let handle = builder
+    //         .with_types()
+    //         .with_components(EthereumNode::components().executor(MyExecutorBuilder::default()))
+    //         .with_add_ons()
+    //         .install_exex("my-exex", |ctx| async move {
+    //             info!("installing exex");
+    //             Ok(my_exex(ctx, cmd_mut, prover))
+    //         })
+    //         .launch()
+    //         .await?;
+
+    //     handle.wait_for_node_exit().await
+    // })
 }
