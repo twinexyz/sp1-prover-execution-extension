@@ -10,6 +10,16 @@ reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth.git" } # Ether
 reth-tracing = { git = "https://github.com/paradigmxyz/reth.git" } # Logging
 reth-node-api = { git = "https://github.com/paradigmxyz/reth.git" } # node api
 
+revm-primitives = { version = "7.1.0", features = [
+  "std",
+], default-features = false }
+
+revm = { version = "12.1.0", features = [
+  "std",
+  "secp256k1",
+  "blst",
+], default-features = false }
+
 eyre = "0.6"
 futures-util = "0.3"
 futures = "0.3.30"
