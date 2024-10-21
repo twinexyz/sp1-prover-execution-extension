@@ -1,9 +1,8 @@
 use reqwest::Client;
+use reth_tracing::tracing::error;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{fs, sync::mpsc};
-use reth_tracing::tracing::error;
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Poster {
@@ -37,7 +36,7 @@ impl Poster {
                         format!("{}/execution_proof_{}.proof", self.proof_path, bn);
                     let proof_file = fs::File::open(proof_file_path).unwrap();
                     let proof_object: Result<sp1_sdk::SP1ProofWithPublicValues, serde_json::Error> =
-                    serde_json::from_reader(proof_file);
+                        serde_json::from_reader(proof_file);
 
                     match proof_object {
                         Ok(proof_buffer) => {
@@ -75,17 +74,15 @@ impl Poster {
                                             }
                                         }
                                         break;
-                                        
-                                    },
+                                    }
                                     Err(_) => {
                                         error!("Proof sending failed.");
                                         break;
-                                    },
+                                    }
                                 }
-
                             }
                         }
-                        Err(_) =>error!("proof not found"),
+                        Err(_) => error!("proof not found"),
                     }
                 }
                 Err(_) => break,
