@@ -24,6 +24,7 @@ impl Poster {
     }
 
     pub async fn send_proof_to_aggregator(&self, rx: mpsc::Receiver<u64>) {
+        let client = Client::new();
         loop {
             let block_number = rx.recv();
             match block_number {
@@ -54,7 +55,6 @@ impl Poster {
                                 "id": 1
                             });
 
-                            let client = Client::new();
                             let mut retry = 0u8;
                             loop {
                                 let response = client
