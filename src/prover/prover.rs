@@ -10,7 +10,7 @@ pub struct Prover {
     proof_path: String,
     rpc_url: String,
     pub poster: Poster,
-    chain_id: String, 
+    chain_id: String,
 }
 
 impl Prover {
@@ -20,7 +20,7 @@ impl Prover {
         rpc_url: String,
         identifier: String,
         aggregator_url: String,
-        chain_id: String, 
+        chain_id: String,
     ) -> Self {
         let output = Command::new("which").args(["rsp"]).output().unwrap().stdout;
         if output.len() == 0 {
@@ -34,7 +34,7 @@ impl Prover {
             proof_path,
             rpc_url,
             poster,
-            chain_id
+            chain_id,
         }
     }
 
