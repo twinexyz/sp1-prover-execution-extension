@@ -1,5 +1,0 @@
-prover:
-  proof_path: "proofs"
-  rpc_url: "http://127.0.0.1:8545"
-  latest_proved_block: "0"
-  
