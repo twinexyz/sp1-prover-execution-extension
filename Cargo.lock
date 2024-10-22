@@ -10725,6 +10725,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "alloy-contract",
+ "alloy-genesis 0.4.2",
  "alloy-network 0.4.2",
  "alloy-primitives 0.8.5",
  "alloy-provider 0.4.2",
@@ -10737,6 +10738,7 @@ dependencies = [
  "http 1.1.0",
  "hyper 1.4.1",
  "json",
+ "parking_lot 0.12.3",
  "reqwest 0.12.7",
  "reth",
  "reth-exex",
@@ -10745,6 +10747,7 @@ dependencies = [
  "reth-tracing",
  "revm 12.1.0",
  "revm-primitives 7.1.0",
+ "schnellru",
  "serde",
  "serde_json",
  "serde_yaml",

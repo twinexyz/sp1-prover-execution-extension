@@ -5,7 +5,7 @@ use prover::prover::Prover;
 use reth::{
     api::FullNodeComponents,
     args::RpcServerArgs,
-    builder::{node, NodeBuilder, NodeConfig},
+    builder::NodeConfig,
     chainspec::{Chain, ChainSpec},
     primitives::Genesis,
 };
@@ -13,7 +13,6 @@ use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_ethereum::EthereumNode;
 use reth_tracing::tracing::{error, info, warn};
 use std::{
-    collections::HashMap,
     sync::{mpsc, Arc, Mutex},
     time::Instant,
     u64,
@@ -104,7 +103,7 @@ fn main() -> eyre::Result<()> {
         .cancun_activated()
         .build();
 
-    let node_config = NodeConfig::test()
+    let _node_config = NodeConfig::test()
         .with_rpc(RpcServerArgs::default().with_http())
         .with_chain(chain_spec);
 
