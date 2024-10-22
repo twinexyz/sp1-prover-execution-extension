@@ -23,6 +23,9 @@ impl Poster {
     }
 
     pub async fn send_proof_to_aggregator(&self, rx: mpsc::Receiver<u64>) {
+        if true {
+            return;
+        }
         loop {
             let block_number = rx.recv();
             match block_number {
@@ -34,7 +37,7 @@ impl Poster {
                     }
                     let proof_file_path =
                         format!("{}/execution_proof_{}.proof", self.proof_path, bn);
-                    let proof_file = fs::File::open(proof_file_path).unwrap();
+                    let proof_file = fs::File::open(proof_file_path).unwrap(); // map error // use expect instead of unwrap where you want to actually halt the execution
                     let proof_object: Result<sp1_sdk::SP1ProofWithPublicValues, serde_json::Error> =
                         serde_json::from_reader(proof_file);
 
