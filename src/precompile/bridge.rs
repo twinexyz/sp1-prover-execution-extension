@@ -1,21 +1,21 @@
 //! This example shows how to implement a node with a custom EVM that uses a stateful precompile
-use alloy_primitives::{address, Address, Bytes, U256};
-use eyre::Ok;
+use alloy::hex::ToHexExt;
+use alloy_primitives::{address, keccak256, Address, Bytes, U256};
+use reth::chainspec::ChainSpec;
+use reth::primitives::{Header, TransactionSigned};
+use reth::revm::primitives::EvmStorageSlot;
+use reth::revm::ContextStatefulPrecompile;
 use reth::{
     api::NextBlockEnvAttributes,
     builder::{components::ExecutorBuilder, BuilderContext},
     primitives::revm_primitives::{BlockEnv, CfgEnvWithHandlerCfg, Env, PrecompileResult, TxEnv},
     revm::{
-        handler::register::EvmHandler, inspector_handle_register, precompile::{Precompile, PrecompileSpecId}, primitives::PrecompileOutput, ContextPrecompile, ContextPrecompiles, Database, Evm, EvmBuilder, GetInspector
+        handler::register::EvmHandler, inspector_handle_register, primitives::PrecompileOutput,
+        ContextPrecompile, Database, Evm, EvmBuilder, GetInspector,
     },
 };
-use reth::chainspec::ChainSpec;
 use reth_node_api::{ConfigureEvm, ConfigureEvmEnv, FullNodeTypes, NodeTypes};
-use reth_node_ethereum::{ EthEvmConfig, EthExecutorProvider};
-use reth::primitives::{
-    revm_primitives::StatefulPrecompileMut,
-    Header, TransactionSigned,
-};
+use reth_node_ethereum::{EthEvmConfig, EthExecutorProvider};
 use std::sync::Arc;
 
 /// Custom EVM configuration
@@ -28,7 +28,9 @@ pub struct TwineEvmConfig {
 impl TwineEvmConfig {
     /// Creates a new instance.
     pub fn _new(chain_spec: Arc<ChainSpec>) -> Self {
-        Self { inner: EthEvmConfig::new(chain_spec) }
+        Self {
+            inner: EthEvmConfig::new(chain_spec),
+        }
     }
 
     /// Sets the precompiles to the EVM handler
@@ -37,35 +39,21 @@ impl TwineEvmConfig {
     /// [ConfigureEvm::evm_with_inspector]
     ///
     /// This will use the default mainnet precompiles and wrap them with a cache.
-    pub fn set_precompiles<EXT, DB>(
-        handler: &mut EvmHandler<EXT, DB>,
-    ) where
-        DB: Database,
-    {
-        // first we need the evm spec id, which determines the precompiles
-        let spec_id = handler.cfg.spec_id;
-
-        let mut loaded_precompiles: ContextPrecompiles<DB> =
-            ContextPrecompiles::new(PrecompileSpecId::from_spec_id(spec_id));
-
-        loaded_precompiles.extend([(
-            address!("9900000000000000000000000000000000000001"),
-            Self::twine_precompile()
-        )]);
-
-        // install the precompiles
-        handler.pre_execution.load_precompiles = Arc::new(move || loaded_precompiles.clone());
-    }
-
-    /// Given a [`ContextPrecompile`] and cache for a specific precompile, create a new precompile
-    /// that wraps the precompile with the cache.
-    fn twine_precompile<DB>() -> ContextPrecompile<DB>
+    pub fn set_precompiles<EXT, DB>(handler: &mut EvmHandler<EXT, DB>)
     where
         DB: Database,
     {
-        let wrapped = TwinePrecompile {};
+        // first we need the evm spec id, which determines the precompiles
+        let prev_handle = handler.pre_execution.load_precompiles.clone();
+        handler.pre_execution.load_precompiles = Arc::new(move || {
+            let mut precompiles = prev_handle();
 
-        ContextPrecompile::Ordinary(Precompile::StatefulMut(Box::new(wrapped)))
+            precompiles.extend([(
+                address!("9900000000000000000000000000000000000001"),
+                ContextPrecompile::ContextStateful(Arc::new(TwinePrecompile {})),
+            )]);
+            precompiles
+        });
     }
 }
 
@@ -73,10 +61,50 @@ impl TwineEvmConfig {
 #[derive(Clone)]
 pub struct TwinePrecompile {}
 
-impl StatefulPrecompileMut for TwinePrecompile {
-    fn call_mut(&mut self, _bytes: &Bytes, _gas_price: u64, _env: &Env) -> PrecompileResult {
-        let initiator = _env.tx.caller;
-        reth_tracing::tracing::info!("the initiator is : {:?}", initiator);
+impl<DB: Database> ContextStatefulPrecompile<DB> for TwinePrecompile {
+    fn call(
+        &self,
+        _bytes: &Bytes,
+        _gas_limit: u64,
+        evmctx: &mut reth::revm::InnerEvmContext<DB>,
+    ) -> PrecompileResult {
+        let mut key: Vec<u8> = Vec::new();
+        key.append(&mut vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let initiator = evmctx.env.tx.caller;
+        let initiator = initiator.0.as_slice();
+        key.append(&mut initiator.to_vec());
+
+        let mut position = vec![0u8; 64];
+        key.append(&mut position);
+
+        let key = keccak256(key);
+        let encoded_key = key.encode_hex_with_prefix();
+
+        reth_tracing::tracing::info!("the storage slot is: {}", encoded_key);
+
+        let balance_address = address!("A51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0");
+        let balance_account = evmctx.load_account(balance_address);
+
+        match balance_account {
+            Ok(mut state) => {
+                let key = U256::from_be_slice(key.as_slice());
+                let storage_action = state.storage.insert(U256::from(0), EvmStorageSlot::new_changed(U256::from(2), U256::from(3)));
+                match storage_action {
+                    Some(slot) =>{
+                        reth_tracing::tracing::info!("the storage slot that is changed is: {:?}", slot);
+                    }
+                    None => {
+                        reth_tracing::tracing::error!("some error in updating the slot");
+                    }
+                }
+                reth_tracing::tracing::info!("mutated the state is : {:?}", key);
+    
+            }
+            Err(_) => {
+                reth_tracing::tracing::error!("error in mutating the state");
+            },
+        }
+
         PrecompileResult::Ok(PrecompileOutput::new(0, Bytes::new()))
     }
 }
@@ -95,7 +123,8 @@ impl ConfigureEvmEnv for TwineEvmConfig {
         contract: Address,
         data: Bytes,
     ) {
-        self.inner.fill_tx_env_system_contract_call(env, caller, contract, data)
+        self.inner
+            .fill_tx_env_system_contract_call(env, caller, contract, data)
     }
 
     fn fill_cfg_env(
@@ -167,6 +196,15 @@ where
         let evm_config = TwineEvmConfig {
             inner: EthEvmConfig::new(ctx.chain_spec()),
         };
-        Ok((evm_config.clone(), EthExecutorProvider::new(ctx.chain_spec(), evm_config)))
+        Ok((
+            evm_config.clone(),
+            EthExecutorProvider::new(ctx.chain_spec(), evm_config),
+        ))
     }
 }
+
+// #[test]
+// fn test_address() {
+//     let BRIDGEOUT_ADDRESS: Address = address!("9900000000000000000000000000000000000001");
+//     println!("{:?}", BRIDGEOUT_ADDRESS);
+// }
