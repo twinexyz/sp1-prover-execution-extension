@@ -10,7 +10,7 @@ use reth::{
     primitives::Genesis,
 };
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
-use reth_node_ethereum::EthereumNode;
+use reth_node_ethereum::{node::EthereumAddOns, EthereumNode};
 use reth_tracing::tracing::{error, info, warn};
 use std::{
     sync::{mpsc, Arc, Mutex},
@@ -20,6 +20,7 @@ use std::{
 mod poster;
 mod precompile;
 mod prover;
+use precompile::bridge::MyExecutorBuilder;
 
 async fn my_exex<Node: FullNodeComponents>(
     mut ctx: ExExContext<Node>,
@@ -40,9 +41,11 @@ async fn my_exex<Node: FullNodeComponents>(
                             continue;
                         }
                         let start_time = Instant::now();
-                        let exit_status = prover.prove(block.block.number);
-                        if !exit_status.success() {
-                            error!("proof generation for block {} failed.", block.block.number);
+                        if false {
+                            let exit_status = prover.prove(block.block.number);
+                            if !exit_status.success() {
+                                error!("proof generation for block {} failed.", block.block.number);
+                            }
                         }
                         let elapsed_time = start_time.elapsed();
                         info!(
@@ -77,7 +80,7 @@ async fn my_exex<Node: FullNodeComponents>(
 fn main() -> eyre::Result<()> {
     dotenv().ok();
 
-    let aggregator_url = std::env::var("AGGREGATOR_URL").unwrap();
+    let aggregator_url = std::env::var("AGGREGATOR_URL").unwrap(); // expect
     let rpc_url = std::env::var("CHAIN_RPC_URL").unwrap();
     let identifier = std::env::var("IDENTIFIER").unwrap();
     let last_proved_block = std::env::var("LAST_BLOCK_PROVED").unwrap();
@@ -110,7 +113,9 @@ fn main() -> eyre::Result<()> {
     let cmd_mut = Arc::new(Mutex::new(0));
     reth::cli::Cli::parse_args().run(|builder, _| async move {
         let handle = builder
-            .node(EthereumNode::default())
+            .with_types::<EthereumNode>()
+            .with_components(EthereumNode::components().executor(MyExecutorBuilder::default()))
+            .with_add_ons::<EthereumAddOns>()
             .install_exex("my-exex", |ctx| async move {
                 info!("installing exex");
                 Ok(my_exex(ctx, cmd_mut, prover))
@@ -120,20 +125,4 @@ fn main() -> eyre::Result<()> {
 
         handle.wait_for_node_exit().await
     })
-
-    // let cmd_mut = Arc::new(Mutex::new(0));
-    // reth::cli::Cli::parse_args().run(|builder, _| async move {
-    //     let handle = builder
-    //         .with_types()
-    //         .with_components(EthereumNode::components().executor(MyExecutorBuilder::default()))
-    //         .with_add_ons()
-    //         .install_exex("my-exex", |ctx| async move {
-    //             info!("installing exex");
-    //             Ok(my_exex(ctx, cmd_mut, prover))
-    //         })
-    //         .launch()
-    //         .await?;
-
-    //     handle.wait_for_node_exit().await
-    // })
 }
