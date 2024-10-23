@@ -1,85 +1,61 @@
-mod utils;
-use dotenv::dotenv;
+//! Example of using the WS provider to subscribe to new blocks.
+
+use std::time::Instant;
+use alloy::providers::{Provider, ProviderBuilder, WsConnect};
+use eyre::Result;
 use futures_util::StreamExt;
-use prover::prover::Prover;
-use reth::{
-    api::FullNodeComponents,
-    args::RpcServerArgs,
-    builder::NodeConfig,
-    chainspec::{Chain, ChainSpec},
-    primitives::Genesis,
-};
-use reth_exex::{ExExContext, ExExEvent, ExExNotification};
-use reth_node_ethereum::{node::EthereumAddOns, EthereumNode};
-use reth_tracing::tracing::{error, info, warn};
-use std::{
-    sync::{mpsc, Arc, Mutex},
-    time::Instant,
-    u64,
-};
 mod poster;
-mod precompile;
 mod prover;
-use precompile::bridge::MyExecutorBuilder;
+use dotenv::dotenv;
+use prover::prover::Prover;
+use tracing::Level;
 
-async fn my_exex<Node: FullNodeComponents>(
-    mut ctx: ExExContext<Node>,
-    cmd_mut: Arc<Mutex<i32>>,
-    prover: Prover,
-) -> eyre::Result<()> {
-    while let Some(notification) = ctx.notifications.next().await {
-        match &notification {
-            ExExNotification::ChainCommitted { new } => {
-                let blocks = new.blocks_iter();
-                let (tx, rx) = mpsc::channel::<u64>();
-                {
-                    let mut mut_guard = cmd_mut.lock().unwrap();
-                    for block in blocks {
-                        if block.transaction_root_is_empty() {
-                            warn!("Empty block {} so skipping", block.block.number);
-                            tx.send(0).unwrap();
-                            continue;
-                        }
-                        let start_time = Instant::now();
-                        if false {
-                            let exit_status = prover.prove(block.block.number);
-                            if !exit_status.success() {
-                                error!("proof generation for block {} failed.", block.block.number);
-                            }
-                        }
-                        let elapsed_time = start_time.elapsed();
-                        info!(
-                            "Block proving: Block: {} Total proving time: {:?}secs",
-                            block.block.number,
-                            elapsed_time.as_secs()
-                        );
-                        tx.send(block.block.number).unwrap();
-                    }
-                    *mut_guard += 1;
-                }
-                tx.send(u64::MAX).unwrap();
-                prover.poster.send_proof_to_aggregator(rx).await;
-            }
-            ExExNotification::ChainReorged { old, new } => {
-                info!(from_chain = ?old.range(), to_chain = ?new.range(), "Received reorg");
-            }
-            ExExNotification::ChainReverted { old } => {
-                info!(reverted_chain = ?old.range(), "Received revert");
-            }
-        };
+#[tokio::main]
+async fn main() -> Result<()> {
+    dotenv().ok();
 
-        if let Some(committed_chain) = notification.committed_chain() {
-            ctx.events
-                .send(ExExEvent::FinishedHeight(committed_chain.tip().number))?;
+    let prover = initialize_prover();
+    load_logging(&"info".to_string());
+
+    let ws = WsConnect::new(std::env::var("CHAIN_WSS_URL").unwrap());
+    let provider = ProviderBuilder::new().on_ws(ws).await?;
+
+    // Subscribe to new blocks.
+    let sub = provider.subscribe_blocks().await?;
+
+    // Wait and take the next 4 blocks.
+    let mut stream = sub.into_stream().take(4);
+
+    println!("Awaiting blocks...");
+
+    // Take the stream and print the block number upon receiving a new block.
+    let handle = tokio::spawn(async move {
+        while let Some(block) = stream.next().await {
+            if block.transactions.len() == 0 {
+                tracing::warn!("continued because of empty blocks");
+                continue;
+            }
+            let start_time = Instant::now();
+            let exit_status = prover.prove(block.header.number);
+            if !exit_status.success() {
+                tracing::error!("proof generation for block {} failed.", block.header.number);
+            }
+            let elapsed_time = start_time.elapsed();
+            tracing::info!(
+                "Block proving: Block: {} Total proving time: {:?}secs",
+                block.header.number,
+                elapsed_time.as_secs()
+            );
+            prover.poster.send_proof_to_aggregator(block.header.number).await;
         }
-    }
+    });
+
+    handle.await?;
 
     Ok(())
 }
 
-fn main() -> eyre::Result<()> {
-    dotenv().ok();
-
+pub fn initialize_prover() -> Prover {
     let aggregator_url = std::env::var("AGGREGATOR_URL").unwrap(); // expect
     let rpc_url = std::env::var("CHAIN_RPC_URL").unwrap();
     let identifier = std::env::var("IDENTIFIER").unwrap();
@@ -88,41 +64,29 @@ fn main() -> eyre::Result<()> {
     let chain_id = std::env::var("CHAIN_ID").unwrap();
     let last_proved_block: u64 = last_proved_block.parse().unwrap();
 
-    let prover = Prover::new(
+    Prover::new(
         last_proved_block,
         proof_path,
         rpc_url,
         identifier,
         aggregator_url,
         chain_id,
-    );
+    )
+}
 
-    let chain_spec = ChainSpec::builder()
-        .chain(Chain::dev())
-        .genesis(Genesis::default())
-        .london_activated()
-        .paris_activated()
-        .shanghai_activated()
-        .cancun_activated()
-        .build();
+pub fn load_logging(level: &String) {
+    let log_level = match level.as_str() {
+        "trace" => Level::TRACE,
+        "debug" => Level::DEBUG,
+        "warn" => Level::WARN,
+        "error" => Level::ERROR,
+        _ => Level::INFO,
+    };
 
-    let _node_config = NodeConfig::test()
-        .with_rpc(RpcServerArgs::default().with_http())
-        .with_chain(chain_spec);
-
-    let cmd_mut = Arc::new(Mutex::new(0));
-    reth::cli::Cli::parse_args().run(|builder, _| async move {
-        let handle = builder
-            .with_types::<EthereumNode>()
-            .with_components(EthereumNode::components().executor(MyExecutorBuilder::default()))
-            .with_add_ons::<EthereumAddOns>()
-            .install_exex("my-exex", |ctx| async move {
-                info!("installing exex");
-                Ok(my_exex(ctx, cmd_mut, prover))
-            })
-            .launch()
-            .await?;
-
-        handle.wait_for_node_exit().await
-    })
+    tracing_subscriber::fmt()
+        .with_max_level(log_level)
+        .with_file(true)
+        .with_line_number(true)
+        .with_target(false)
+        .init();
 }
