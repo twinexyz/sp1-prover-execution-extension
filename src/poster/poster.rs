@@ -1,75 +1,95 @@
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::{fs, sync::mpsc};
+use reth_tracing::tracing::error;
 
-use alloy::{hex::FromHex, signers::local::PrivateKeySigner};
-use alloy_network::EthereumWallet;
-use alloy_primitives::{bytes::Bytes, Address, B256};
-use alloy_provider::ProviderBuilder;
-use alloy_sol_types::sol;
 
-sol! {
-    #[sol(rpc)] // <-- Important! Generates the necessary `MyContract` struct and function methods.
-    contract Verifier {
-        constructor(address) {} // The `deploy` method will also include any constructor arguments.
-
-        #[derive(Debug)]
-        function verifyProof(
-            bytes32 programVKey,
-            bytes calldata publicValues,
-            bytes calldata proofBytes
-        ) external view;
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Poster {
+    aggregator_url: String,
+    proof_path: String,
+    identifier: String,
 }
 
-pub async fn post_to_l1(rx: mpsc::Receiver<u64>) {
-    let contract_address = std::env::var("CONTRACT_ADDRESS").unwrap();
-    let private_key = std::env::var("PRIVATE_KEY").unwrap();
-    let rpc_url = std::env::var("RPC_URL").unwrap();
-    let contract_address = Address::from_hex(contract_address).unwrap();
-    let signer = PrivateKeySigner::from_bytes(&B256::from_hex(private_key).unwrap()).unwrap();
-    let wallet = EthereumWallet::from(signer);
+static MAX_RETRY: u8 = 10;
 
-    loop {
-        let block_number = rx.recv();
-        match block_number {
-            Ok(bn) => {
-                if bn == 0u64 {
-                    continue
-                } else if bn == u64::MAX {
-                    return 
-                }
-                let proof_file_path = format!("proofs/execution_proof_{}.proof", bn);
-                let proof_file = fs::File::open(proof_file_path).unwrap();
-                let proof_object: Result<sp1_sdk::SP1ProofWithPublicValues, serde_json::Error> =
-                    serde_json::from_reader(proof_file);
-                match proof_object {
-                    Ok(proof) => {
-                        _ = proof;
-                        println!("proof found");
-                        if true {
-                            return;
-                        }
-                        // TODO: posting to L1 is done here.
-                        let provider = ProviderBuilder::new()
-                            .with_cached_nonce_management()
-                            .wallet(wallet.clone())
-                            .on_builtin(&rpc_url)
-                            .await
-                            .unwrap();
-                        let contract = Verifier::new(contract_address, provider.clone());
+impl Poster {
+    pub fn new(aggregator_url: String, proof_path: String, identifier: String) -> Self {
+        Self {
+            aggregator_url,
+            proof_path,
+            identifier,
+        }
+    }
 
-                        let byte_value = Bytes::new();
-                        let byte_value2 = Bytes::new();
-                        let call_builder = contract.verifyProof(
-                            alloy_primitives::FixedBytes([0u8; 32]),
-                            alloy_primitives::Bytes(byte_value),
-                            alloy_primitives::Bytes(byte_value2),
-                        );
-                        _ = call_builder.call().await.unwrap();
+    pub async fn send_proof_to_aggregator(&self, rx: mpsc::Receiver<u64>) {
+        let client = Client::new();
+        loop {
+            let block_number = rx.recv();
+            match block_number {
+                Ok(bn) => {
+                    if bn == 0u64 {
+                        continue;
+                    } else if bn == u64::MAX {
+                        return;
                     }
-                    Err(_) => println!("proof not found"),
+                    let proof_file_path =
+                        format!("{}/execution_proof_{}.proof", self.proof_path, bn);
+                    let proof_file = fs::File::open(proof_file_path).unwrap();
+                    let proof_object: Result<sp1_sdk::SP1ProofWithPublicValues, serde_json::Error> =
+                    serde_json::from_reader(proof_file);
+
+                    match proof_object {
+                        Ok(proof_buffer) => {
+                            let payload = json!({
+                                "jsonrpc": "2.0",
+                                "method": "twarb_sendProof",
+                                "params": [
+                                    {
+                                        "type": "SP1Proof",
+                                        "identifier": &self.identifier,
+                                        "proof": proof_buffer
+                                    }
+                                    ],
+                                "id": 1
+                            });
+
+                            let mut retry = 0u8;
+                            loop {
+                                let response = client
+                                    .post(&self.aggregator_url)
+                                    .json(&payload)
+                                    .send()
+                                    .await;
+
+                                match response {
+                                    Ok(res) => {
+                                        if !res.status().is_success() {
+                                            if retry < MAX_RETRY {
+                                                retry += 1;
+                                                continue;
+                                            } else {
+                                                error!("Proof could not be sent to the aggregator"); // TODO extended retry logic
+                                                break;
+                                            }
+                                        }
+                                        break;
+                                        
+                                    },
+                                    Err(_) => {
+                                        error!("Proof sending failed.");
+                                        break;
+                                    },
+                                }
+
+                            }
+                        }
+                        Err(_) =>error!("proof not found"),
+                    }
                 }
+                Err(_) => break,
             }
-            Err(_) => break,
         }
     }
 }
